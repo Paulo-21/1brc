@@ -1,14 +1,18 @@
-use std::{collections::HashMap, time::Instant};
+use std::time::Instant;
 use memmap2::Mmap;
-use ahash::AHashMap;
+//use ahash::AHashMap;
+use std::hash::BuildHasher;
+use ahash::RandomState;
 
 fn main() {
     let file_path = "../1brc/data/measurements1b.txt";
     //let file_path = "../1brc/measurements.txt";
     let start = Instant::now();
     let mmap: Mmap;
-    let mut hash: AHashMap<&[u8], (f32, f32, f32, u16)> = AHashMap::new(); 
-
+    //let mut hash: AHashMap<&[u8], (f32, f32, f32, u16)> = AHashMap::with_capacity(10000); 
+    let mut city = [(0u16,0u16,0u16,0u16); 10000];
+    let hash_builder = RandomState::with_seed(42);
+    
     let data;
     {
         let file = std::fs::File::open(file_path).unwrap();
@@ -18,12 +22,13 @@ fn main() {
     let mut i = 0;
     let mut startn = 0;
     let mut endn = 0;
-    loop  {
-        startn = i;
-        if data.len() == i {
+    while data.len() != i {
+        /*if data.len() == i {
             break;
-        }
+        }*/
+        startn = i;
         unsafe {
+            i+=2;
             loop {
                 i += 1;
                 if *data.get_unchecked(i) == b';' {
@@ -39,26 +44,33 @@ fn main() {
             
             //let a = String::from_utf8_lossy(&data[startn..endn]);
             //print!("|{} : ", a);
-            let mut neg = false;
-            if *data.get_unchecked(i) == b'-' {
-                neg = true;
-                i+=1;
-            }
+            //let mut neg = false;
+            
+            let neg = *data.get_unchecked(i) == b'-';
+            i+= 1 * (*data.get_unchecked(i) == b'-') as usize;
+            
             let mut temperature = *data.get_unchecked(i) & 0x0f;
             i+=1;
-            if *data.get_unchecked(i) != b'.' {
-                temperature *= 10;
-                temperature += *data.get_unchecked(i) & 0x0f;
+                temperature *= 10 * (*data.get_unchecked(i) != b'.') as u8;
+                temperature += (*data.get_unchecked(i) & 0x0f) * (*data.get_unchecked(i) != b'.') as u8;
                 i+=1;
-            }
+            
             i+=1;
             //print!("{}", *data.get_unchecked(i));
-            let mut temperature = temperature as f32;
-            temperature += ((*data.get_unchecked(i) & 0x0f) as f32) / 10.;
-            i+=2;
-            if neg { temperature *= -1.; }
+            let mut temperature: u16 = temperature as u16;
+            temperature += (*data.get_unchecked(i) & 0x0f) as u16;
+            i+=2;   
+            
             //println!("{}|", temperature);
-            match hash.get_mut(&data[startn..endn]) {
+            //let hash = (hash_builder.hash_one(&data[startn..endn])%10000) as usize;
+            let hash = 9;
+            city[hash].0 = temperature * (city[hash].0 > temperature) as u16;
+            city[hash].2 = temperature * (city[hash].2 < temperature) as u16;
+            city[hash].1 += temperature * !neg as u16;
+            city[hash].1 -= temperature * neg as u16;
+            city[hash].3 += 1;
+            
+            /*match hash.get_mut(&data[startn..endn]) {
                 Some(v) => {
                     if v.0 > temperature {
                         v.0 = temperature;
@@ -72,7 +84,7 @@ fn main() {
                 None => {
                     hash.insert(&data[startn..endn], (temperature, temperature, temperature, 1));
                 }
-            }
+            }*/
             //yeah
         }
     }
